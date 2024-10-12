@@ -1,5 +1,5 @@
 #
-# Makefile for Linux ATOMISP Media filesystem driver.
+# Makefile for Linux Atom ISP driver for Kernel >=6.10 .
 #
 # This driver needs multiple components, which some of them are not build in kernel relases
 #   media/pci/intel/ipu-bridge.ko
@@ -16,20 +16,26 @@
 #
 # If we compile only stanging/media/atomisp we will detect the camera but there is no v4l2 device under /dev/
 #
+#
 # To respect the kernel flow, we need these definitions:
+# 1. Build Intel media PCI drivers:
 #   To build ipu-bridge.ko as module:
-#     CONFIG_IPU_BRIDGE=m
+export CONFIG_IPU_BRIDGE=m
 #   To build ipu3-cio2.ko as module:
-#     CONFIG_VIDEO_IPU3_CIO2=m
-#   To build mei_ace.ko mei_csi.ko as module:
-#     CONFIG_INTEL_VSC=m
-#   To build staging/media/atomisp:
-#     CONFIG_STAGING=y
-#     CONFIG_INTEL_ATOMISP=m
-#     CONFIG_VIDEO_ATOMISP=m
-#   For  Anniedale (Merrifield+ / Moorefield) and Cherrytrail SoCs:
-#     CONFIG_VIDEO_ATOMISP_ISP2401=y
-#   Setting this symbol to NO will enables support for Atom ISP2400-based boards (Merrifield and Baytrail SoCs)
+export CONFIG_VIDEO_IPU3_CIO2=m
+#   To build ipu6.ko as module:
+export CONFIG_VIDEO_INTEL_IPU6=m
+#
+# 2. Build staging/media/atomisp drivers:
+export CONFIG_STAGING=y
+export CONFIG_INTEL_ATOMISP=m
+export CONFIG_VIDEO_ATOMISP=m
+#   To build I2C modules atomisp-mt9m114, atomisp-gc2235, atomisp-ov2722, atomisp-gc0310 and atomisp-libmsrlisthelper:
+export CONFIG_VIDEO_ATOMISP_MT9M114=m
+export CONFIG_VIDEO_ATOMISP_GC2235=m
+export CONFIG_VIDEO_ATOMISP_OV2722=m
+export CONFIG_VIDEO_ATOMISP_GC0310=m
+export CONFIG_VIDEO_ATOMISP_MSRLIST_HELPER=m
 #
 # Each definition in Kconfig is expanded as:
 #    If CONFIG_FOU=y, then we need to pass to compiler macro -DCONFIG_FOU
@@ -41,40 +47,6 @@ export KVER_MAJ_MIN = $(shell echo ${KERNELRELEASE} | sed "s/\([0-9]\+\.[0-9]\+\
 
 export DRIVER_NAME := atomisp
 
-# Define SYMBOLS / MACROS for which modules to build
-export CONFIG_STAGING=y
-
-# Build pci/intel/ipu-bridge.ko
-export CONFIG_IPU_BRIDGE=m
-export CONFIG_INTEL_VSC=m
-# CONFIG_VIDEO_INTEL_IPU6 added in 6.10
-export CONFIG_VIDEO_INTEL_IPU6=m
-export CONFIG_VIDEO_IPU3_CIO2=m
-
-# Build :
-#   Dependency of CONFIG_INTEL_ATOMISP
-#     stating/media/atomisp/isp/atomisp-mt9m114.o
-#     stating/media/atomisp/isp/atomisp-gc2235.o
-#     stating/media/atomisp/isp/atomisp-ov2722.o
-#     stating/media/atomisp/isp/atomisp-gc0310.o
-#     stating/media/atomisp/isp/atomisp-libmsrlisthelper.o
-#     stating/media/atomisp/isp/atomisp-lm3554.o
-#
-#   Dependency of CONFIG_VIDEO_ATOMISP
-#     stating/media/atomisp/atomisp.ko
-#     stating/media/atomisp/pci/atomisp_gmin_platform.ko
-
-# CONFIG_INTEL_ATOMISP removed in 6.10
-export CONFIG_VIDEO_ATOMISP=m
-export CONFIG_VIDEO_ATOMISP_OV2722=m
-export CONFIG_VIDEO_ATOMISP_GC2235=m
-export CONFIG_VIDEO_ATOMISP_MSRLIST_HELPER=m
-export CONFIG_VIDEO_ATOMISP_MT9M114=m
-# CONFIG_VIDEO_ATOMISP_OV5693 removed in 6.7
-export CONFIG_VIDEO_ATOMISP_GC0310=m
-# CONFIG_VIDEO_ATOMISP_LM3554 was removed in 6.10
-# CONFIG_VIDEO_ATOMISP_ISP2401 removed in 6.7
-
 # Add necessary macros to the compiler depending on whan we get on make command
 ifeq ($(CONFIG_IPU_BRIDGE),m)
 KBUILD_CFLAGS += -DCONFIG_IPU_BRIDGE_MODULE
@@ -84,8 +56,8 @@ ifeq ($(CONFIG_VIDEO_IPU3_CIO2),m)
 KBUILD_CFLAGS += -DCONFIG_VIDEO_IPU3_CIO2_MODULE
 endif
 
-ifeq ($(CONFIG_INTEL_VSC),m)
-KBUILD_CFLAGS += -DCONFIG_INTEL_VSC_MODULE
+ifeq ($(CONFIG_VIDEO_INTEL_IPU6),m)
+KBUILD_CFLAGS += -DCONFIG_VIDEO_INTEL_IPU6_MODULE
 endif
 
 ifeq ($(CONFIG_INTEL_ATOMISP),m)
