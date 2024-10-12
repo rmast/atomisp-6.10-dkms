@@ -42,7 +42,7 @@ export KVER_MAJ_MIN = $(shell echo ${KERNELRELEASE} | sed "s/\([0-9]\+\.[0-9]\+\
 export DRIVER_NAME := atomisp
 
 # Define SYMBOLS / MACROS for which modules to build
-export CONFIG_MEDIA_STAGING=y
+export CONFIG_STAGING=y
 
 # Build pci/intel/ipu-bridge.ko
 export CONFIG_IPU_BRIDGE=m
