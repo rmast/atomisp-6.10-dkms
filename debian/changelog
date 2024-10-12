@@ -1,8 +1,13 @@
+atomisp-6.10-dkms (1.0.2) unstable; urgency=medium
+
+  * Add Atom ISP for Kernel 6.12-rc2
+
+ -- EasyNetDev <devel@easynet.dev>  Sat, 12 Oct 2024 17:13:04 +0300
+
 atomisp-6.10-dkms (1.0.1) unstable; urgency=medium
 
   * Update Atom ISP for Kernel 6.10.14
   * Add Atom ISP for Kernel 6.11.3
-  * Add Atom ISP for Kernel 6.12-rc2
 
  -- EasyNetDev <devel@easynet.dev>  Sat, 12 Oct 2024 17:13:04 +0300
 
