@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Multimedia device configuration
+#
+
+#
+# NOTE: CEC and Remote Controller support should not depend on MEDIA_SUPPORT
+#
+
+menuconfig MEDIA_SUPPORT
+	tristate "Multimedia support"
+	depends on HAS_IOMEM
+	help
+	  If you want to use media devices, including Webcams, Video grabber
+	  devices and/or TV devices, V4L2 codecs, etc, enable this option
+	  and other options below.
+
+	  Additional info and docs are available on the web at
+	  <https://linuxtv.org>
+
+if MEDIA_SUPPORT
+
+menu "Media drivers"
+
+comment "Drivers filtered as selected at 'Filter media drivers'"
+	depends on MEDIA_SUPPORT_FILTER
+
+comment "Media drivers"
+
+source "drivers/media/pci/Kconfig"
+
+endmenu
+
+endif # MEDIA_SUPPORT

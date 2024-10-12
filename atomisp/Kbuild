@@ -1,0 +1,40 @@
+# Autodetection if we have a driver for the specific MAJOR.MINOR version of kernel
+# In case the directory MAJOR.MINOR is missing, we stop compilation with an error
+
+ifeq ($(KVER_MAJ_MIN),)
+$(error KVER_MAJ_MIN not defined. Maybe there is an error in Kbuild/Makefile)
+endif
+
+# Just for debugging
+#$(info DRIVER_NAME=$(DRIVER_NAME))
+#$(info DIR="$(M)/$(DRIVER_NAME)/$(KVER_MAJ_MIN)")
+#$(info src=$(src))
+
+KVER_DIR = $(wildcard $(M)/$(DRIVER_NAME)/$(KVER_MAJ_MIN)/*)
+
+#$(info KVER_DIR="$(KVER_DIR)")
+
+ifeq ($(KVER_DIR),)
+#$(error Couldn't find driver sources for Linux Kernel $(KVER_MAJ_MIN).X. You can update $(DRIVER_NAME)/ directory with sources from the specific kernel using the structure of other drivers.)
+$(error This driver is for Kernels >= 6.10)
+else
+$(info Found driver sources for Linux Kernel $(KVER_MAJ_MIN).x)
+endif
+
+# The driver itself has a variable atomisp in drivers/staging/media/atomisp/Makefile defined as atomisp = $(srctree)/drivers/staging/media/atomisp/
+# To be able to compile the driver outside the kernel, we need to change it to atomisp = $(src)
+
+ATOMISP_MAKEFILE := $(M)/$(DRIVER_NAME)/$(KVER_MAJ_MIN)/drivers/staging/media/atomisp/Makefile
+#$(info ATOMISP_MAKEFILE=$(ATOMISP_MAKEFILE))
+
+ATOMISP_VAR := $(shell grep 'atomisp = $$(srctree)' $(ATOMISP_MAKEFILE))
+#$(info ATOMISP_VAR=$(ATOMISP_VAR))
+
+ifneq ($(ATOMISP_VAR),)
+$(shell sed -i "s/atomisp = .*/atomisp = $$\\(src\\)/g" $(ATOMISP_MAKEFILE))
+endif
+
+#export CFLAGS_ipu-bridge.o := -DCONFIG_IPU_BRIDGE=$(CONFIG_IPU_BRIDGE) -I$(M)/$(DRIVER_NAME)/$(KVER_MAJ_MIN)/include
+#export CFLAGS_test.o := -DCONFIG_IPU_BRIDGE=$(CONFIG_IPU_BRIDGE) -I$(M)/$(DRIVER_NAME)/$(KVER_MAJ_MIN)/include
+
+obj-y	:= $(KVER_MAJ_MIN)/
