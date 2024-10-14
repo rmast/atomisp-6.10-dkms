@@ -1,3 +1,9 @@
+atomisp-6.10-dkms (1.0.3) unstable; urgency=medium
+
+  * Added automatisation for new drivers.
+
+ -- EasyNetDev <devel@easynet.dev>  Mon, 14 Oct 2024 03:09:04 +0300
+
 atomisp-6.10-dkms (1.0.2-2) unstable; urgency=medium
 
   * Add Atom ISP platform additional drivers
