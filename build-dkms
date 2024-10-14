@@ -1,0 +1,537 @@
+#!/bin/bash
+
+# This script is trying to figure out the Symbols from Kconfig files and get the modules from Makefiles.
+# If there is a difference between 2 consecutive driver versions (like number of symbols and modules)
+# the script will create a new dkms.conf file for each packege.
+# Each new package will be called atomisp-X.YY-dkms where X.YY is the first kernel driver version where
+# the differences appears. This package will contain also the next kernel drivers which are similar 
+# whith this version
+# 
+# Example. Let's say we have these drivers for these kernels for Atom ISP: 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.16
+# 6.10 and 6.11 will have the same number of symbols and modules. It will be called atomisp-6.10-dkms and it will contain 6.10 and 6.11 drivers
+# But starting from 6.12 to 6.14 we have some additional modules and symbols. This package will be called atomisp-6.12-dkms and it will contain 6.12 to 6.14 drivers.
+# Then 6.15 and 6.16 are the same, but different from 6.14. The package will be called atomisp-6.15-dkms and it will contain drivers 6.15 and 6.16.
+#
+
+if [[ -z "${__DEBUG__}" ]]; then
+    __DEBUG__=0
+else
+    # Check if __DEBUG__ is an integer. Otherwise set to 1
+    case ${__DEBUG__} in
+	*[!0-9]*)
+	    __DEBUG__=1
+	;;
+    esac
+    if [ ${__DEBUG__} -ge 5 ]; then
+	# Enable SHELL/DASH script debugging
+	set -x
+    fi
+fi
+
+
+printf_debug()
+{
+    # Print debug with level
+    # Arguments:
+    #    $1 - level of debug. This level must match ${__DEBUG__} to print
+    #    $2 - printf format
+    #    .. - values for printf format
+    # Example:
+    #  printf_debug 1 "The string is %s\n" "TEST"
+    
+    local _LEVEL_="$1"
+    shift
+    local _PRINTF_FORMAT_="$1"
+    shift
+
+    case ${_LEVEL_} in
+	*[!0-9]*)
+	    _LEVEL_=1
+	;;
+    esac
+
+    if [[ ${_LEVEL_} -le ${__DEBUG__} ]]; then
+	printf "${_PRINTF_FORMAT_}" $@
+    fi
+}
+
+generate_dkms()
+{
+
+    local _KVER_MIN_="$1"
+    local _KVER_MAX_="$2"
+    local _OUTPUT_="debian/dkms-${KVER}.conf.in"
+
+    printf "_KVER_MAX_: %s\n" "${_KVER_MAX_}"
+
+    cat << _EOF_ > ${_OUTPUT_}
+PACKAGE_NAME="atomisp-${KVER}"
+# PACKAGE_VERSION will be rewritten by rules
+PACKAGE_VERSION="#VERSION#"
+BUILT_MODULE_NAME="atomisp-${KVER}"
+## Macros are definded in Makefile for all drivers
+MAKE="make -C \$kernel_source_dir M=\$dkms_tree/\$PACKAGE_NAME/\$PACKAGE_VERSION/build"
+CLEAN="make clean"
+# To avoid missing sources for Atom ISP for a specific kernel version
+# I have to set MIN and MAX kernel version to build only.
+# This means the driver will not fail for Kernels that are not present in atomisp directory.
+BUILD_EXCLUSIVE_KERNEL_MIN="${_KVER_MIN_}"
+BUILD_EXCLUSIVE_KERNEL_MAX="${_KVER_MAX_}"
+# Build only for ia32 and x86_64/amd64
+BUILD_EXCLUSIVE_ARCH="^(ia32|i386|x86_64|amd64)"
+AUTOINSTALL="yes"
+_EOF_
+
+    printf "#\n" >> ${_OUTPUT_}
+    printf "# List of modules to be installed\n" >> ${_OUTPUT_}
+    for _IDX_ in ${!MODULES[@]}; do
+	printf "BUILT_MODULE_NAME[${_IDX_}]=\"${MODULES[${_IDX_}]}\"\n" >> ${_OUTPUT_}
+	printf "BUILT_MODULE_LOCATION[${_IDX_}]=\"atomisp/\$(echo \$kernelver | sed 's/\([0-9]\+\.[0-9]\+\)\..*/\\\1/g')/${MODULES_PATH[${_IDX_}]}\"\n" >> ${_OUTPUT_}
+    done
+
+    printf "#\n" >> ${_OUTPUT_}
+    printf "# DEST_MODULE_LOCATION[#] is ignored by Debian, but it is required by DKMS\n" >> ${_OUTPUT_}
+    for _IDX_ in ${!MODULES[@]}; do
+	printf "DEST_MODULE_LOCATION[${_IDX_}]=\"/extra\"\n" >> ${_OUTPUT_}
+    done
+}
+
+generate_dpkg_files()
+{
+    # We need to create these files for dpkg-buildpackage
+    # 1. Generic atomisp-X.YY-dkms.{postinst,postrm,prerm}.in
+    # 2. atomisp-${KVER}.install.in which must contains:
+    #   2.1. README.md
+    #   2.2. LICENSE
+    #   2.3. Makefile
+    #   2.4. All debian/dkms-X.YY.conf from ${KVER} to ${KVER_MAX}
+    #   2.5. All directories atomisp/X.YY from ${KVER} to ${KVER_MAX}
+    #   2.6. All debian/Kbuild-CFLAGS-X.YY.mk from ${KVER} to ${KVER_MAX}
+    #   2.7. All debian/Symbols-X.YY.mk from ${KVER} to ${KVER_MAX}
+    # 3. A control file that contains all PACKAGES[@] kernels
+    #
+    # To do this we need to go through PACKAGES[@] and get all atomisp/ drivers versions for that specific package
+    # When we find KVER with first element in PACKAGES[@]
+
+    local _KVER_MIN_="$1"
+    local _KVER_MAX_="$2"
+    local _KVER_START_=0
+    local _KVER_DRIVER_
+    local _KVER_PREV_
+
+    local _PGK_NAME_="atomisp-${_KVER_MIN_}"
+
+    # Search the atomisp directory and add all drivers found between ${KVER} and ${KVER_END}
+    # If ${KVER_END} is NULL, then to the end.
+
+    # Add generic postinst,postrm,prerm files
+    for i in postinst postrm prerm; do
+	cp debian/dkms.${i}.template debian/${_PGK_NAME_}-dkms.${i}.in
+	sed -i "s|#PKG_NAME#|${_PGK_NAME_}|" debian/${_PGK_NAME_}-dkms.${i}.in
+    done
+
+    # Add default files to atomisp-${_KVER_MIN_}.install.in
+    printf "#!/usr/bin/dh-exec --with=install
+README.md			usr/src/atomisp-${_KVER_MIN_}-#VERSION#/
+LICENSE				usr/src/atomisp-${_KVER_MIN_}-#VERSION#/
+Makefile			usr/src/atomisp-${_KVER_MIN_}-#VERSION#/
+atomisp/Kbuild			usr/src/atomisp-${_KVER_MIN_}-#VERSION#/atomisp/
+debian/dkms-${_KVER_MIN_}.conf => usr/src/atomisp-${_KVER_MIN_}-#VERSION#/dkms.conf
+" > debian/${_PGK_NAME_}-dkms.install.in
+
+    _KVER_START_=0
+    for _KVER_DRIVER_ in `ls -1 atomisp | grep "^[0-9]\+\.[0-9]\+" | sort -V`; do
+	#echo "KVER_DRIVER=${_KVER_DRIVER_}"
+	# KVER_DRIVER reach the next Kernel version in PACKAGE. We need to stop.
+	if [[ "${_KVER_DRIVER_}" == "${_KVER_MAX_}" && ${_KVER_START_} -eq 1 && ${#PACKAGES[@]} -gt 1 ]]; then
+	    _KVER_START_=0
+	    break
+	fi
+	if [[ "${_KVER_DRIVER_}" == "${_KVER_MIN_}" ]]; then
+	    _KVER_START_=1
+	fi
+	if [[ ${_KVER_START_} -eq 1 ]]; then
+	    printf "Kbuild-CFLAGS-${_KVER_DRIVER_}.mk		usr/src/atomisp-${_KVER_MIN_}-#VERSION#/\n" >> debian/${_PGK_NAME_}-dkms.install.in
+	    printf "Symbols-${_KVER_DRIVER_}.mk			usr/src/atomisp-${_KVER_MIN_}-#VERSION#/\n" >> debian/${_PGK_NAME_}-dkms.install.in
+	    printf "atomisp/${_KVER_DRIVER_}/			usr/src/atomisp-${_KVER_MIN_}-#VERSION#/atomisp/\n" >> debian/${_PGK_NAME_}-dkms.install.in
+	fi
+	_KVER_PREV_=${_KVER_DRIVER_}
+    done
+    printf_debug 1 " -> Added drivers between %s and %s\n" "${_KVER_MIN_}" "${_KVER_PREV_}"
+
+}
+
+generate_control()
+{
+    # This funtion will generate the control file for dpkg-buildpackage
+    
+    # Header
+    cat << _EOF_ > debian/control
+Source: atomisp-6.10-dkms
+Section: admin
+Priority: optional
+Maintainer: EasyNetDev <devel@easynet.dev>
+Build-Depends: debhelper (>= 7.0.50~)
+Standards-Version: 3.9.1
+Homepage: https://github.com/EasyNetDev/atomisp-6.10-dkms
+Vcs-Browser: https://github.com/EasyNetDev/atomisp-6.10-dkms
+Vcs-Git: https://github.com/EasyNetDev/atomisp-6.10-dkms.git
+
+_EOF_
+
+    for KVER_IDX in ${!PACKAGES[@]}; do
+
+	KVER=${PACKAGES[${KVER_IDX}]}
+	if [[ $((KVER_IDX+1)) -ge ${#PACKAGES[@]} ]]; then
+	    DESC="for Kernels >= ${KVER} and <= "$(ls -1 atomisp | grep "^[0-9]\+\.[0-9]\+" | sort -V | tail -1)
+	else
+	    KVER_MAX=${PACKAGES[$((KVER_IDX+1))]}
+	    DESC="for Kernel >= ${KVER}, but < ${KVER_MAX}"
+	fi
+
+    cat << _EOF_ >> debian/control
+Package: atomisp-${KVER}-dkms
+Architecture: all
+Depends: \${misc:Depends}, dkms, linux-libc-dev, libc6-dev
+XB-Modaliases: \${modaliases}
+Description:   Enable support for Intel Atom ISP camera ${DESC}
+ Enable support for the Intel ISP2 camera interfaces and MIPI
+ sensor drivers.
+ This is original Linux Driver ported as external module.
+
+_EOF_
+    done
+}
+
+
+get_symbols()
+{
+
+    local SYMBOL
+    local SYMBOL_TYPE
+    local SYMBOL_FOUND=0
+    local LINE
+    local Kconfig_file="$1"
+
+    while IFS=$'\n' read LINE
+    do
+	#printf "${LINE}\n"
+	if [[ ${SYMBOL_FOUND} -eq 1 ]]; then
+	    SYMBOL_TYPE=$(echo ${LINE} | sed -e 's/^[[:space:]]*//')
+	    SYMBOL_TYPE=${SYMBOL_TYPE%% *}
+	    #printf "Symbol Type: ${SYMBOL_TYPE}\n"
+	    case "$SYMBOL_TYPE" in
+		bool)
+		    KVER_SYMBOLS+=( "CONFIG_${SYMBOL}" )
+		    KVER_SYMBOLS_VALUE+=( "y" )
+		    #printf "%s=y\n" "${SYMBOL}"
+		;;
+		tristate)
+		    KVER_SYMBOLS+=( "CONFIG_${SYMBOL}" )
+		    KVER_SYMBOLS_VALUE+=( "m" )
+		    #printf "%s=m\n" "${SYMBOL}"
+		;;
+		*)
+		    # Could be string/hex/int. Not intersting for us.
+		    #SYMBOLS_VALUE+=( "m" )
+		    #printf "%s=m\n" "${SYMBOL}"
+		;;
+	    esac
+	    SYMBOL_FOUND=0
+	    continue
+	fi
+	if [[ "${LINE}" =~ ^config ]]; then
+	    SYMBOL=${LINE##config }
+	    #printf "${SYMBOL}\n"
+	    SYMBOL_FOUND=1
+	    continue
+	fi
+	if [[ "${LINE}" =~ ^menuconfig ]]; then
+	    SYMBOL=${LINE##menuconfig }
+	    #printf "${SYMBOL}\n"
+	    SYMBOL_FOUND=1
+	    continue
+	fi
+    done < "${Kconfig_file}"
+
+}
+
+get_modules()
+{
+    local SYMBOL
+    local SYMBOL_TYPE
+    local SYMBOL_FOUND=0
+    local LINE
+    local IDX
+    local MODULE
+    local MODULE_DIR
+    local KVER_SYMBOL
+    local Makefile_file="$1"
+    local DIRBASE
+
+    DIRBASE=$(dirname ${Makefile_file})
+    #printf "Module path is: %s\n" "${DIRBASE}"
+    # Strip the ./atomisp/${KVER}/ from path
+    DIRBASE=${DIRBASE#./atomisp/${KVER}}
+    DIRBASE=${DIRBASE#/}
+    #printf "Module path is: %s\n" "${DIRBASE}"
+
+    while IFS=$'\n' read LINE
+    do
+	if [[ "${LINE}" =~ ^obj-.*\.o$ ]]; then
+	    #printf "%s\n" "${LINE}"
+	    SYMBOL=${LINE##*\$\(}
+	    SYMBOL=${SYMBOL%%\)*}
+	    MODULE=${LINE##*= }
+	    MODULE=${MODULE%\.o}
+	    # Let's check if this Symbol it is present in KVER_SYMBOLS and the value is "m".
+	    # In case is not found we will not add the module to the array. Means KVER_SYMBOL is missing from Kconfig file.
+	    for IDX in  ${!KVER_SYMBOLS[@]}; do
+		if [[ "${SYMBOL}" == "${KVER_SYMBOLS[${IDX}]}" && "${KVER_SYMBOLS_VALUE[${IDX}]}" == "m" ]]; then
+		    # Create the arrays for MODULES and for MODULES_PATH
+		    MODULE_DIR=$(dirname ${MODULE})
+		    MODULE=$(basename ${MODULE})
+		    #printf "Symbol: %s\n" "$SYMBOL"
+		    #printf "Module: %s\n" "$MODULE"
+		    KVER_MODULES+=( "${MODULE}" )
+		    if [[ "${MODULE_DIR}" == "." ]]; then
+			#printf "Module path: %s\n" "${DIRBASE}"
+			KVER_MODULES_PATH+=( "${DIRBASE}" )
+		    else
+			#printf "Module path: %s/%s\n" "${DIRBASE}" "${MODULE_DIR}"
+			KVER_MODULES_PATH+=( "${DIRBASE}/${MODULE_DIR}" )
+		    fi
+		    break;
+		fi
+	    done
+	fi
+    done < "${Makefile_file}"
+}
+
+# Display all Kconfig symbols for each driver version
+# In case there are differences between the current driver and previous one, save the symbols
+# and try to build a symbol file with the lowest number of modules.
+# Becasue DKMS needs a specific number of BUILT_MODULE_NAME[#], BUILT_MODULE_LOCATION[#], DEST_MODULE_LOCATION[#] directives.
+# If a driver has more modules, then DKMS will fail on other versions because can't find the additional module.
+#
+PREV_KVER=""
+
+# Iteration check for symbols and modules.
+SYMBOLS=()
+SYMBOLS_VALUE=()
+MODULES=()
+MODULES_PATH=()
+
+# Symbols for current kernel driver
+KVER_SYMBOLS=()
+KVER_SYMBOLS_VALUE=()
+KVER_MODULES=()
+KVER_MODULES_PATH=()
+
+# Temporary Symbols array
+SYMBOLS_NEW=()
+SYMBOLS_VALUE_NEW=()
+
+PACKAGES=()
+
+# BASH can't use variables that contains dots (.). So we have to convert KVER from 6.10 format to 6_10 using ${KVER/./_}
+# eval is used to convert first ${KVER/./_} and then to compute variable like SYMBOLS_6_10 from SYMBOLS_${KVER/./_}
+
+printf "Preparing DKMS packages for atomisp\n"
+
+for KVER in `ls -1 atomisp | grep "^[0-9]\+\.[0-9]\+" | sort -V`; do
+
+    KVER_SYMBOLS=()
+    KVER_SYMBOLS_VALUE=()
+    KVER_MODULES=()
+    KVER_MODULES_PATH=()
+
+    printf_debug 1 "\nKernel %s:\n" "${KVER}"
+    # Generate KVER_SYMBOLS and KVER_SYMBOLS_VALUE.
+    for Kconfig_file in `find ./atomisp/$KVER/ -name Kconfig`; do
+	get_symbols "$Kconfig_file"
+    done
+
+    # Look for the symbols with value "m" in Makefiles and extract the modules name.
+    # Build an array of modules.
+    # Generate KVER_MODULES and KVER_MODULES_VALUE.
+    for Makefile in `find ./atomisp/$KVER/ -name Makefile`; do
+	get_modules "$Makefile"
+    done
+    
+    # In case our Symbol file is empty, just copy the current one
+    if [[ ${#SYMBOLS[@]} -eq 0 ]]; then
+	# Create a new package
+	printf_debug 1 "Add new package for Kernels >= %s\n" "${KVER}"
+	PACKAGES+=( "$KVER" )
+	eval SYMBOLS_${KVER/./_}=\( \$\{KVER_SYMBOLS\[@\]\} \)
+	eval SYMBOLS_VALUE_${KVER/./_}=\( \$\{KVER_SYMBOLS_VALUE\[@\]\} \)
+	eval MODULES_${KVER/./_}=\( \$\{KVER_MODULES\[@\]\} \)
+	eval MODULES_PATH_${KVER/./_}=\( \$\{KVER_MODULES_PATH\[@\]\} \)
+	
+	# Load kernel specific symbols to SYMBOLS and SYMBOLS_VALUE. They will be used in next iteretion.
+	SYMBOLS=( ${KVER_SYMBOLS[@]} )
+	SYMBOLS_VALUE=( ${KVER_SYMBOLS_VALUE[@]} )
+	MODULES=( ${KVER_MODULES[@]} )
+	MODULES_PATH=( ${KVER_MODULES_PATH[@]} )
+
+    else
+	# We will do only modules and modules path check. 
+	# This is important for DKMS because we need to create different dkms.conf 
+	# if the number of modules is different or the module path from kernel to kernel.
+	#
+	# Let's check the modules array against the current one
+	# If the module is not found or the path is not the same, we need to create a new package. DKMS will fail to find the module
+	for MODULE_IDX in ${!MODULES[@]}; do
+	    MODULE_FOUND=0
+	    printf_debug 3 "Comparing %s(%s) with:\n" "${MODULES[${MODULE_IDX}]}" "${KVER_PREV}"
+	    for KVER_MODULE_IDX in ${!KVER_MODULES[@]}; do
+		printf_debug 3 "  -> %s(%s) .." "${KVER_MODULES[${KVER_MODULE_IDX}]}" "${KVER}"
+		# Check the module name and the module path
+		if [[ "${MODULES[${MODULE_IDX}]}" == "${KVER_MODULES[${KVER_MODULE_IDX}]}" && "${MODULES_PATH[${MODULE_IDX}]}" == "${KVER_MODULES_PATH[${KVER_MODULE_IDX}]}" ]]; then
+		    printf_debug 3 " OK\n"
+		    MODULE_FOUND=1
+		    break
+		fi
+		printf_debug 3 "next\n"
+	    done
+	    if [[ ${MODULE_FOUND} -eq 0 ]]; then
+		printf_debug 2 "Module %s (%s) not found in previous kernel (%s)\n" "${MODULES_PATH[${MODULE_IDX}]}" "${MODULES[${MODULE_IDX}]}" "${KVER_PREV}"
+		printf_debug 1 "Driver for Kernel %s is different from previous Kernel %s\n" "${KVER}" "${KVER_PREV}"
+		printf_debug 1 "Add new package for Kernels >= %s\n" "${KVER}"
+		# Create a new package
+		PACKAGES+=( "$KVER" )
+		eval SYMBOLS_${KVER/./_}=\( \$\{KVER_SYMBOLS\[@\]\} \)
+		eval SYMBOLS_VALUE_${KVER/./_}=\( \$\{KVER_SYMBOLS_VALUE\[@\]\} \)
+		eval MODULES_${KVER/./_}=\( \$\{KVER_MODULES\[@\]\} \)
+		eval MODULES_PATH_${KVER/./_}=\( \$\{KVER_MODULES_PATH\[@\]\} \)
+		break
+	    fi
+	done
+
+	# Let's check also the current modules array aginst the previous one
+	# If the module is not found or the path is not the same, we need to create a new package. DKMS will fail to find the module
+	if [[ ${MODULE_FOUND} -eq 1 ]]; then
+
+	    for KVER_MODULE_IDX in ${!KVER_MODULES[@]}; do
+		MODULE_FOUND=0
+		printf_debug 3 "Comparing %s(%s) with:\n" "${KVER_MODULES[${KVER_MODULE_IDX}]}" "${KVER}" 
+		for MODULE_IDX in ${!MODULES[@]}; do
+		    printf_debug 3 "  -> %s(%s) .." "${MODULES[${MODULE_IDX}]}" "${KVER_PREV}"
+		    # Check the module name and the module path
+		    if [[ "${MODULES[${MODULE_IDX}]}" == "${KVER_MODULES[${KVER_MODULE_IDX}]}" && "${MODULES_PATH[${MODULE_IDX}]}" == "${KVER_MODULES_PATH[${KVER_MODULE_IDX}]}" ]]; then
+			printf_debug 3 " OK\n"
+			MODULE_FOUND=1
+			break
+		    fi
+		    printf_debug 3 "next\n"
+		done
+		if [[ ${MODULE_FOUND} -eq 0 ]]; then
+		    printf_debug 2 "Module %s (%s) not found in previous kernel (%s)\n" "${KVER_MODULES[${KVER_MODULE_IDX}]}" "${KVER}" "${KVER_PREV}"
+		    printf_debug 1 "Driver for Kernel %s is different from previous Kernel %s\n" "${KVER}" "${KVER_PREV}"
+		    printf_debug 1 "Add new package for Kernels >= %s\n" "${KVER}"
+		    # Create a new package
+		    PACKAGES+=( "$KVER" )
+		    eval SYMBOLS_${KVER/./_}=\( \$\{KVER_SYMBOLS\[@\]\} \)
+		    eval SYMBOLS_VALUE_${KVER/./_}=\( \$\{KVER_SYMBOLS_VALUE\[@\]\} \)
+		    eval MODULES_${KVER/./_}=\( \$\{KVER_MODULES\[@\]\} \)
+		    eval MODULES_PATH_${KVER/./_}=\( \$\{KVER_MODULES_PATH\[@\]\} \)
+		    break
+		fi
+	    done
+
+	    if [[ ${MODULE_FOUND} -eq 1 ]]; then
+		printf_debug 1 "Driver for Kernel ${KVER} has same modules as previous Kernel\n"
+	    fi
+	fi
+	# Load current kernel driver config to SYMBOLS, SYMBOLS_VALUE, MDOULES and MODULES_PATH. They will be used in next iteration.
+	SYMBOLS=( ${KVER_SYMBOLS[@]} )
+	SYMBOLS_VALUE=( ${KVER_SYMBOLS_VALUE[@]} )
+	MODULES=( ${KVER_MODULES[@]} )
+	MODULES_PATH=( ${KVER_MODULES_PATH[@]} )
+    fi
+    KVER_PREV=${KVER}
+    #printf "Packages: %s\n" "${PACKAGES[@]}"
+done
+
+printf_debug 1 "\n"
+
+printf "Cleanup all Kbuild-CFLAGS*, Symbols*, atomisp-*-dkms.{install,postinst,postrm,prerm}{,.in} debian/dkms-*.conf{,.in} files.\n"
+rm -rf Kbuild-CFLAGS-*.mk
+rm -rf Symbols-*.mk
+rm -f debian/atomisp-*-dkms.{install,postinst,postrm,prerm}{,.in} debian/dkms-*.conf{,.in}
+
+printf_debug 1 "\n"
+## Let's build the Symbols-${KVER}.mk, Kbuild-CLFAGS-${KVER}.mk and dkms-${KVER}.conf
+## For each driver similar with ${KVER} in atomisp we must create a symlink
+for KVER_IDX in ${!PACKAGES[@]}; do
+
+    KVER=${PACKAGES[${KVER_IDX}]}
+
+    printf_debug 1 "Build package for atomisp-%s-dkms\n" "${KVER}"
+
+    eval SYMBOLS=( \$\{SYMBOLS_${KVER/./_}\[@\]\} )
+    eval SYMBOLS_VALUE=( \$\{SYMBOLS_VALUE_${KVER/./_}\[@\]\} )
+    eval MODULES=( \$\{MODULES_${KVER/./_}\[@\]\} )
+    eval MODULES_PATH=( \$\{MODULES_PATH_${KVER/./_}\[@\]\} )
+
+    #echo $((KVER_IDX+1))
+    printf_debug 2 "Total of packages: %s\n" "${#PACKAGES[@]}"
+    if [[ ${#PACKAGES[@]} -eq 1 ]]; then
+	# Special case when all drivers are similar in terms of modules and paths.
+	# Get the last driver version from atomisp/
+	KVER_MAX=$(ls -1 atomisp | grep "^[0-9]\+\.[0-9]\+" | sort -V | tail -1)
+    elif [[ $((KVER_IDX+1)) -ge ${#PACKAGES[@]} ]]; then
+	TITLE="for Kernel drivers >= ${KVER}"
+	KVER_MAX=${KVER}
+    else
+	KVER_MAX=${PACKAGES[$((KVER_IDX+1))]}
+	TITLE="# CFLAGS definitions for Kernel drivers >= ${KVER} but < ${KVER_MAX}"
+    fi
+
+    rm -f Kbuild-CFLAGS-${KVER}.mk
+    rm -f Symbols-${KVER}.mk
+    printf "# CFLAGS definitions %s\n" "$TITLE"  > Kbuild-CFLAGS-${KVER}.mk
+    printf "# SYMBOLS definitions %s\n" "$TITLE"  > Symbols-${KVER}.mk
+
+    KVER_START=0
+    # Create symlinks to Kbuild-CFLAGS-${KVER}.mk for the divers between KVER and KVER_MAX
+    for KVER_DRIVER in `ls -1 atomisp | grep "^[0-9]\+\.[0-9]\+" | sort -V`; do
+	#echo "KVER_DRIVER=${KVER_DRIVER}"
+	# KVER_DRIVER reach the next Kernel version in PACKAGE. We need to stop.
+	if [[ "${KVER_DRIVER}" == "${KVER_MAX}" && ${KVER_START} -eq 1 && ${#PACKAGES[@]} -gt 1 ]]; then
+	    KVER_START=0
+	    break
+	fi
+	if [[ "${KVER_DRIVER}" == "${KVER}" ]]; then
+	    KVER_START=1
+	fi
+	if [[ ${KVER_START} -eq 1 && "${KVER}" != "${KVER_DRIVER}" ]]; then
+	    if [[ -f Kbuild-CFLAGS-${KVER_DRIVER}.mk ]]; then
+		rm -f Kbuild-CFLAGS-${KVER_DRIVER}.mk
+	    fi
+	    if [[ -f Symbols-${KVER_DRIVER}.mk ]]; then
+		rm -f Symbols-${KVER_DRIVER}.mk
+	    fi
+	    ln -s Kbuild-CFLAGS-${KVER}.mk Kbuild-CFLAGS-${KVER_DRIVER}.mk
+	    ln -s Symbols-${KVER}.mk Symbols-${KVER_DRIVER}.mk
+	fi
+    done
+
+
+    for IDX in ${!SYMBOLS[@]}; do
+	printf "ifeq (\$(${SYMBOLS[${IDX}]}),m)\n" >> Kbuild-CFLAGS-${KVER}.mk
+	printf "KBUILD_CFLAGS += -D${SYMBOLS[${IDX}]}_MODULE\n" >> Kbuild-CFLAGS-${KVER}.mk
+	printf "endif\n" >> Kbuild-CFLAGS-${KVER}.mk
+	printf "export ${SYMBOLS[${IDX}]}=${SYMBOLS_VALUE[${IDX}]}\n" >> Symbols-${KVER}.mk
+    done
+
+    generate_dkms "${KVER}" "${KVER_MAX}"
+    generate_dpkg_files "${KVER}" "${KVER_MAX}"
+done
+
+generate_control
+
+printf "Done\n"
+
+exit 
