@@ -5,10 +5,10 @@ set -e
 # Copyright (C) 2007 Mario Limonciello
 # Copyright (C) 2009 Alberto Milone
 
-CVERSION=`dpkg-query -W -f='${Version}' #PKG_NAME#-dkms | awk -F "-" '{print $1}' | cut -d\: -f2`
+CVERSION=`dpkg-query -W -f='${Version}' atomisp-6.10-dkms | awk -F "-" '{print $1}' | cut -d\: -f2`
 MODULES_DIR=$(ls /lib/modules/)
 CURRENT_KERNEL=$(uname -r)
-PACKAGE_NAME="#PKG_NAME#"
+PACKAGE_NAME="atomisp-6.10"
 
 ARCH=`dpkg --print-architecture`
 

@@ -2,7 +2,7 @@
 menu "Device Drivers"
 
 source "drivers/media/Kconfig"
-
 source "drivers/staging/Kconfig"
+source "drivers/platform/Kconfig"
 
 endmenu

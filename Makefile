@@ -14,28 +14,19 @@
 #   staging/media/atomisp/i2c/atomisp-mt9m114.ko
 #   staging/media/atomisp/i2c/atomisp-ov2722.ko
 #
+# Also I found some missing drivers are not build by Debian Kernel by default in drivers/platform/x86/intel/
+#
 # If we compile only stanging/media/atomisp we will detect the camera but there is no v4l2 device under /dev/
 #
 #
 # To respect the kernel flow, we need these definitions:
 # 1. Build Intel media PCI drivers:
-#   To build ipu-bridge.ko as module:
-export CONFIG_IPU_BRIDGE=m
-#   To build ipu3-cio2.ko as module:
-export CONFIG_VIDEO_IPU3_CIO2=m
-#   To build ipu6.ko as module:
-export CONFIG_VIDEO_INTEL_IPU6=m
-#
+#   To build ipu-bridge.ko, ipu3-cio2.ko and ipu6.ko as module.
 # 2. Build staging/media/atomisp drivers:
-export CONFIG_STAGING=y
-export CONFIG_INTEL_ATOMISP=m
-export CONFIG_VIDEO_ATOMISP=m
-#   To build I2C modules atomisp-mt9m114, atomisp-gc2235, atomisp-ov2722, atomisp-gc0310 and atomisp-libmsrlisthelper:
-export CONFIG_VIDEO_ATOMISP_MT9M114=m
-export CONFIG_VIDEO_ATOMISP_GC2235=m
-export CONFIG_VIDEO_ATOMISP_OV2722=m
-export CONFIG_VIDEO_ATOMISP_GC0310=m
-export CONFIG_VIDEO_ATOMISP_MSRLIST_HELPER=m
+#   To build I2C modules atomisp-mt9m114, atomisp-gc2235, atomisp-ov2722, atomisp-gc0310 and atomisp-libmsrlisthelper.
+# 3. Build additional platform drivers
+#
+
 #
 # Each definition in Kconfig is expanded as:
 #    If CONFIG_FOU=y, then we need to pass to compiler macro -DCONFIG_FOU
@@ -43,53 +34,25 @@ export CONFIG_VIDEO_ATOMISP_MSRLIST_HELPER=m
 # and used my IS_ENABLE(), IS_MODULE() or IS_BUILTIN() macros in Kernel
 
 # Autodetection if we have a driver for the specific MAJOR.MINOR version of kernel
-export KVER_MAJ_MIN = $(shell echo ${KERNELRELEASE} | sed "s/\([0-9]\+\.[0-9]\+\)\..*/\1/g")
-
 export DRIVER_NAME := atomisp
 
-# Add necessary macros to the compiler depending on whan we get on make command
-ifeq ($(CONFIG_IPU_BRIDGE),m)
-KBUILD_CFLAGS += -DCONFIG_IPU_BRIDGE_MODULE
-endif
+# CONFIG_STAGING must be y to be able to build atomisp/drivers/${KVER}/staging/
+export CONFIG_STAGING=y
 
-ifeq ($(CONFIG_VIDEO_IPU3_CIO2),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_IPU3_CIO2_MODULE
-endif
-
-ifeq ($(CONFIG_VIDEO_INTEL_IPU6),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_INTEL_IPU6_MODULE
-endif
-
-ifeq ($(CONFIG_INTEL_ATOMISP),m)
-KBUILD_CFLAGS += -DCONFIG_INTEL_ATOMISP_MODULE
-endif
-
-ifeq ($(CONFIG_VIDEO_ATOMISP),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_ATOMISP_MODULE
-endif
-
-ifeq ($(CONFIG_VIDEO_ATOMISP_MT9M114),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_ATOMISP_MT9M114_MODULE
-endif
-
-ifeq ($(CONFIG_VIDEO_ATOMISP_GC2235),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_ATOMISP_GC2235_MODULE
-endif
-
-ifeq ($(CONFIG_VIDEO_ATOMISP_OV2722),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_ATOMISP_OV2722_MODULE
-endif
-
-ifeq ($(CONFIG_VIDEO_ATOMISP_GC0310),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_ATOMISP_GC0310_MODULE
-endif
-
-ifeq ($(CONFIG_VIDEO_ATOMISP_MSRLIST_HELPER),m)
-KBUILD_CFLAGS += -DCONFIG_VIDEO_ATOMISP_MSRLIST_HELPER_MODULE
-endif
+# When you use make KVER=$(uname -r), make will not match this condition.
+# First will go "else" and then will recall this Makefile with defined KERNELRELASE.
 
 ifneq ($(KERNELRELEASE),)
 # call from kernel build system
+
+export KVER_MAJ_MIN = $(shell echo ${KERNELRELEASE} | sed "s/\([0-9]\+\.[0-9]\+\)\..*/\1/g")
+
+#$(info "Include Kernel ver $(KVER_MAJ_MIN) specific symbols: Symbols-$(KVER_MAJ_MIN).mk and Kbuild-Cflags-$(KVER_MAJ_MIN).mk")
+
+# Load symbols
+include $(M)/Symbols-$(KVER_MAJ_MIN).mk
+# Define KBUILD_CFLAGS for each Kernel version for each Symbol defined in Symbols-$(KVER_MAJ_MIN).mk
+include $(M)/Kbuild-CFLAGS-$(KVER_MAJ_MIN).mk
 
 obj-y := $(DRIVER_NAME)/
 
@@ -111,12 +74,13 @@ KDIR		?= /lib/modules/$(KVER)/build
 MDIR		?= /lib/modules/$(KVER)
 PWD		:= $(shell pwd)
 
-KVER_MAJ_MIN    := $(word 2,$(VERS-AS-LIST))
+#KVER_MAJ_MIN	:= $(word 2,$(VERS-AS-LIST))
 
-$(info $(MAJOR)-$(MINOR)-$(BUGFIX))
-$(exit 1)
+KVER_MAJ_MIN = $(shell echo ${KVER} | sed "s/\([0-9]\+\.[0-9]\+\)\..*/\1/g")
 
-obj-y := $(DRIVER_NAME)/
+#obj-y := $(DRIVER_NAME)/
+
+$(info "External module build..")
 
 %.ko:
 	$(MAKE) -C $(KDIR) M=$(PWD)
@@ -136,15 +100,25 @@ help:
 	$(MAKE) -C $(KDIR) M=$(PWD) help
 
 PHONY += install
-install: 
-	rm -f ${MDIR}/kernel/extra/drivers/staging/media/$(DRIVER_NAME)/$(DRIVER_NAME).ko
-	install -m644 -b -D atomisp/$(KVER_MAJ_MIN)/drivers/staging/media/$(DRIVER_NAME)/$(DRIVER_NAME).ko ${MDIR}/kernel/extra/drivers/staging/media/$(DRIVER_NAME)/$(DRIVER_NAME).ko
-	depmod -aq
+install:
+	echo "Curent path: $(PWD)"
+	for subdir in $(shell find $(PWD)/atomisp/6.10/drivers -maxdepth 1  -type d -printf "%f\n" | tail +2); do \
+	    echo $$subdir; \
+	    MODULE_PATH=$(PWD)/atomisp/$(KVER_MAJ_MIN)/drivers/$$subdir; \
+	    echo $${MODULE_PATH}; \
+	    for module in `find $${MODULE_PATH} \( -name "*.ko" \) -printf "%h/%f\n"`; do \
+		MODULE_PATH=$${module#$(PWD)/atomisp/$(KVER_MAJ_MIN)/drivers/}; \
+		echo $${MODULE_PATH} ; \
+		install -m644 -b -D $$i $(PWD)/atomisp/$(KVER_MAJ_MIN)/drivers/$${MODULE_PATH} ${MDIR}/kernel/extra/$(DRIVER_NAME)/$$(dirname $${MODULE_PATH})/$$(basename $${MODULE_PATH}) ; \
+	    done \
+	done
+	depmod -a
 
 PHONY += uninstall
 uninstall:
-	rm -rf ${MDIR}/kernel/extra/drivers/staging/media/$(DRIVER_NAME)/$(DRIVER_NAME).ko
-	depmod -aq
+	$(info $(DRIVER_NAME))
+	rm -rf ${MDIR}/kernel/extra/$(DRIVER_NAME) ; \
+	depmod -a
 
 endif
 

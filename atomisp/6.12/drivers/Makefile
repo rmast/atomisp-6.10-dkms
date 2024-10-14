@@ -13,3 +13,4 @@ endif
 
 obj-y				+= media/
 obj-$(CONFIG_STAGING)		+= staging/
+obj-y				+= platform/

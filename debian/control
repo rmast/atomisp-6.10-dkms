@@ -12,7 +12,8 @@ Package: atomisp-6.10-dkms
 Architecture: all
 Depends: ${misc:Depends}, dkms, linux-libc-dev, libc6-dev
 XB-Modaliases: ${modaliases}
-Description:   Enable support to Intel Atom ISP camera drivers
+Description:   Enable support for Intel Atom ISP camera for Kernels >= 6.10 and <= 6.12
  Enable support for the Intel ISP2 camera interfaces and MIPI
  sensor drivers.
  This is original Linux Driver ported as external module.
+

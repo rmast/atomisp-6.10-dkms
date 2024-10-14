@@ -7,11 +7,11 @@ set -e
 
 #DEBHELPER#
 
-CVERSION=`dpkg-query -W -f='${Version}' #PKG_NAME#-dkms | awk -F "-" '{print $1}' | cut -d\: -f2`
+CVERSION=`dpkg-query -W -f='${Version}' atomisp-6.10-dkms | awk -F "-" '{print $1}' | cut -d\: -f2`
 case "$1" in
     remove|upgrade)
-		echo "Removing all #PKG_NAME# DKMS Modules"
-		dkms remove -m #PKG_NAME# -v $CVERSION --all > /dev/null || true
+		echo "Removing all atomisp-6.10 DKMS Modules"
+		dkms remove -m atomisp-6.10 -v $CVERSION --all > /dev/null || true
 		echo "Done."
         ;;
 esac
