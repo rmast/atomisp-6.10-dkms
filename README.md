@@ -20,7 +20,7 @@ This script will search for symbols and modules in each version of atomisp direc
 
 In case there are some differences between the Kernel drivers, will automatically creates a new package.
 
-Each package will contain drivers which has same modules and paths.
+Each package will contain drivers which has same modules names and modules paths.
 
 Example: we have drivers for kernels 6.10, 6.11, 6.12, 6.13, 6.14 and 6.15.
 
