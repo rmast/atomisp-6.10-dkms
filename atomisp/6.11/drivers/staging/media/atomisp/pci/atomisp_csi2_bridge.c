@@ -55,13 +55,8 @@ static const guid_t intel_sensor_gpio_info_guid =
  * module identifier.
  */
 static const guid_t intel_sensor_module_guid =
-#ifdef IS_ISP2401
-	GUID_INIT(0x822ace8f, 0x2814, 0x4174,
-		0xa5, 0x6b, 0x5f, 0x02, 0x9f, 0xe0, 0x79, 0xee);
-#elif
 	GUID_INIT(0x377ba76a, 0xf390, 0x4aff,
 		  0xab, 0x38, 0x9b, 0x1b, 0xf3, 0x3a, 0x30, 0x15);
-#endif
 /*
  * dc2f6c4f-045b-4f1d-97b9-882a6860a4be
  * This _DSM GUID returns a package with n*2 strings, with each set of 2 strings
@@ -128,6 +123,7 @@ static struct gmin_cfg_var asus_t100ta_vars[] = {
 	{"INT33F0:00", "CsiLanes", "1"},
 	{"INT33F0:00", "CsiBayer", "0"},
 	{"INT33F0:00", "CamClk", "1"},
+	{"INT33F0:00", "HpllFreq", "3840"},
 	{}
 };
 

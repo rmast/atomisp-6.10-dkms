@@ -1,0 +1,1 @@
+savedcmd_drivers/platform/x86/intel/int3472/intel_skl_int3472_discrete.mod := printf '%s\n'   discrete.o clk_and_regulator.o led.o common.o | awk '!x[$$0]++ { print("drivers/platform/x86/intel/int3472/"$$0) }' > drivers/platform/x86/intel/int3472/intel_skl_int3472_discrete.mod

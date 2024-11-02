@@ -1,0 +1,1 @@
+savedcmd_drivers/platform/x86/intel/int3472/intel_skl_int3472_discrete.ko := ld -r -m elf_x86_64 -z noexecstack --build-id=sha1  -T scripts/module.lds -o drivers/platform/x86/intel/int3472/intel_skl_int3472_discrete.ko drivers/platform/x86/intel/int3472/intel_skl_int3472_discrete.o drivers/platform/x86/intel/int3472/intel_skl_int3472_discrete.mod.o
