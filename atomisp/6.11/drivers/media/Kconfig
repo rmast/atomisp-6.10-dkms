@@ -28,6 +28,7 @@ comment "Drivers filtered as selected at 'Filter media drivers'"
 comment "Media drivers"
 
 source "drivers/media/pci/Kconfig"
+source "drivers/media/i2c/Kconfig"
 
 endmenu
 

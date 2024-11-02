@@ -28,16 +28,3 @@ config INTEL_ATOMISP2_LED
 	  To compile this driver as a module, choose M here: the module
 	  will be called intel_atomisp2_led.
 
-config INTEL_ATOMISP2_PM
-	tristate "Intel AtomISP v2 dummy / power-management driver"
-	depends on PCI && IOSF_MBI && PM
-	depends on !INTEL_ATOMISP
-	select INTEL_ATOMISP2_PDX86
-	help
-	  Power-management driver for Intel's Image Signal Processor found on
-	  Bay Trail and Cherry Trail devices. This dummy driver's sole purpose
-	  is to turn the ISP off (put it in D3) to save power and to allow
-	  entering of S0ix modes.
-
-	  To compile this driver as a module, choose M here: the module
-	  will be called intel_atomisp2_pm.

@@ -9,7 +9,7 @@ obj-$(CONFIG_VIDEO_ATOMISP) += pci/atomisp_gmin_platform.o
 # While on staging, keep debug enabled
 DEFINES += -DDEBUG
 
-atomisp = $(srctree)/drivers/staging/media/atomisp/
+atomisp = $(src)
 
 # SPDX-License-Identifier: GPL-2.0
 atomisp-objs += \

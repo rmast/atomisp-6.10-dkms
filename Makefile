@@ -3,7 +3,6 @@
 #
 # This driver needs multiple components, which some of them are not build in kernel relases
 #   media/pci/intel/ipu-bridge.ko
-#   media/pci/intel/ipu3/ipu3-cio2.ko
 #   media/pci/intel/ivcs/mei_ace.ko
 #   media/pci/intel/ivcs/mei_csi.c
 #   staging/media/atomisp/pci/atomisp_gmin_platform.ko
@@ -21,7 +20,7 @@
 #
 # To respect the kernel flow, we need these definitions:
 # 1. Build Intel media PCI drivers:
-#   To build ipu-bridge.ko, ipu3-cio2.ko and ipu6.ko as module.
+#   To build ipu-bridge.ko as module.
 # 2. Build staging/media/atomisp drivers:
 #   To build I2C modules atomisp-mt9m114, atomisp-gc2235, atomisp-ov2722, atomisp-gc0310 and atomisp-libmsrlisthelper.
 # 3. Build additional platform drivers

@@ -195,6 +195,7 @@ int atomisp_freq_scaling(struct atomisp_device *isp,
 	int i, ret;
 	unsigned short fps = 0;
 
+	dev_info(isp->dev, "mode: %d\n",mode);
 	dfs = isp->dfs;
 
 	if (dfs->lowest_freq == 0 || dfs->max_freq_at_vmin == 0 ||
@@ -220,10 +221,13 @@ int atomisp_freq_scaling(struct atomisp_device *isp,
 			 "Sensor didn't report FPS. Using DFS max mode.\n");
 		new_freq = dfs->highest_freq;
 		goto done;
-	}
-
+	} else
+		dev_info(isp->dev, "Sensor did report FPS: %d\n",fps);
+	
 	curr_rules.width = isp->asd.fmt[ATOMISP_SUBDEV_PAD_SOURCE].fmt.width;
+	dev_info(isp->dev, "width: %d\n",curr_rules.width);
 	curr_rules.height = isp->asd.fmt[ATOMISP_SUBDEV_PAD_SOURCE].fmt.height;
+	dev_info(isp->dev, "height: %d\n",curr_rules.height);
 	curr_rules.fps = fps;
 	curr_rules.run_mode = isp->asd.run_mode->val;
 
