@@ -31,6 +31,8 @@
 #include <media/v4l2-mediabus.h>
 #include <media/v4l2-subdev.h>
 
+#include "aptina-pll.h"
+
 /* Sysctl registers */
 #define MT9M114_CHIP_ID					CCI_REG16(0x0000)
 #define MT9M114_COMMAND_REGISTER			CCI_REG16(0x0080)
@@ -363,6 +365,16 @@ enum mt9m114_format_flag {
 	MT9M114_FMT_FLAG_CSI2 = BIT(1),
 };
 
+enum {
+	MT9M114_19_2_MHZ,
+	MT9M114_24_MHZ,
+};
+
+static const unsigned long mt9m114_xvclk_freqs[] = {
+	[MT9M114_19_2_MHZ] = 19200000,
+	[MT9M114_24_MHZ] = 24000000,
+};
+
 struct mt9m114_format_info {
 	u32 code;
 	u32 output_format;
@@ -374,15 +386,12 @@ struct mt9m114 {
 	struct regmap *regmap;
 
 	struct clk *clk;
+	u32    xvclk_freq;
 	struct gpio_desc *reset;
 	struct regulator_bulk_data supplies[3];
 	struct v4l2_fwnode_endpoint bus_cfg;
 
-	struct {
-		unsigned int m;
-		unsigned int n;
-		unsigned int p;
-	} pll;
+	struct aptina_pll pll;
 
 	unsigned int pixrate;
 	bool streaming;
@@ -750,7 +759,7 @@ static int mt9m114_initialize(struct mt9m114 *sensor)
 						       sensor->pll.n),
 		  &ret);
 	cci_write(sensor->regmap, MT9M114_CAM_SYSCTL_PLL_DIVIDER_P,
-		  MT9M114_CAM_SYSCTL_PLL_DIVIDER_P_VALUE(sensor->pll.p), &ret);
+		  MT9M114_CAM_SYSCTL_PLL_DIVIDER_P_VALUE(sensor->pll.p1), &ret);
 	cci_write(sensor->regmap, MT9M114_CAM_SENSOR_CFG_PIXCLK,
 		  sensor->pixrate, &ret);
 
@@ -2102,6 +2111,17 @@ static void mt9m114_ifp_cleanup(struct mt9m114 *sensor)
 	media_entity_cleanup(&sensor->ifp.sd.entity);
 }
 
+/*
+ * struct mt9m114_platform_data - MT9M114 platform data
+ * @ext_freq: Input clock frequency
+ * @target_freq: Pixel clock frequency
+ */
+struct mt9m114_platform_data {
+	unsigned int pixclk_pol:1;
+	int ext_freq;
+	int target_freq;
+};
+
 /* -----------------------------------------------------------------------------
  * Power Management
  */
@@ -2238,26 +2258,70 @@ static const struct dev_pm_ops mt9m114_pm_ops = {
 static int mt9m114_clk_init(struct mt9m114 *sensor)
 {
 	unsigned int link_freq;
+	int ret;
 
-	/* Hardcode the PLL multiplier and dividers to default settings. */
-	sensor->pll.m = 32;
-	sensor->pll.n = 1;
-	sensor->pll.p = 7;
+	static const struct aptina_pll_limits limits = {
+		.ext_clock_min = 19200000,
+		.ext_clock_max = 24000000,
+		.int_clock_min = 4800000,
+		.int_clock_max = 48000000,
+		.out_clock_min = 384000000,
+		.out_clock_max = 384000000,
+		.pix_clock_max = 96000000,
+		.n_min = 1,
+		.n_max = 64,
+		.m_min = 9,
+		.m_max = 255,
+		.p1_min = 1,
+		.p1_max = 128,
+	};
+
+	sensor->pll.ext_clock = sensor->xvclk_freq;
+	sensor->pll.pix_clock = sensor->bus_cfg.link_frequencies[0]/8;
+
+	ret = aptina_pll_calculate(&sensor->client->dev, &limits, &sensor->pll);
+	if (ret) {
+		dev_err(&sensor->client->dev, "Failed to calculate pll\n");
+		return ret;
+	} else {
+		// Aptina calculator for some reason doesn't take account of the + 1 added later to p1 and n, while the previous
+		// mt9m114 driver was about "Aptina" 
+		// verdachte handeling, wellicht is het muteren van de klok wel allesverstorend
+		//sensor->pll.p1--;
+		//sensor->pll.n--;
+	}
+	//from the original Onsemi driver, assuming a 24000000 clock
+	//sensor->pll.m = 32;
+	//sensor->pll.n = 1;
+	//sensor->pll.p1 = 7;
+	//I expect numbers similar to these values to appear for the 19200000 clock that is set by the atomisp module instead of 25000000.
+	//sensor->pll.m = 10;
+	//sensor->pll.n = 0;
+	//sensor->pll.p1 = 3;
 
 	/*
 	 * Calculate the pixel rate and link frequency. The CSI-2 bus is clocked
 	 * for 16-bit per pixel, transmitted in DDR over a single lane. For
-	 * parallel mode, the sensor ouputs one pixel in two PIXCLK cycles.
+	 * parallel mode, the sensor outputs one pixel in two PIXCLK cycles.
 	 */
-	sensor->pixrate = clk_get_rate(sensor->clk) * sensor->pll.m
-			/ ((sensor->pll.n + 1) * (sensor->pll.p + 1));
+	sensor->pixrate = sensor->xvclk_freq * sensor->pll.m
+			/ ((sensor->pll.n + 1) * (sensor->pll.p1 + 1));
 
 	link_freq = sensor->bus_cfg.bus_type == V4L2_MBUS_CSI2_DPHY
 		  ? sensor->pixrate * 8 : sensor->pixrate * 2;
 
-	if (sensor->bus_cfg.nr_of_link_frequencies != 1 ||
-	    sensor->bus_cfg.link_frequencies[0] != link_freq) {
-		dev_err(&sensor->client->dev, "Unsupported DT link-frequencies\n");
+	if (sensor->bus_cfg.nr_of_link_frequencies != 1) {
+		dev_err(&sensor->client->dev,
+			"Unsupported DT link-frequencies: expected 1, got %u\n",
+			sensor->bus_cfg.nr_of_link_frequencies);
+		return -EINVAL;
+	}
+
+	if (sensor->bus_cfg.link_frequencies[0] != link_freq) {
+		dev_err(&sensor->client->dev,
+			"Unsupported DT link-frequency value: expected %llu, got %llu\n",
+			(unsigned long long)link_freq, 
+			(unsigned long long)sensor->bus_cfg.link_frequencies[0]);
 		return -EINVAL;
 	}
 
@@ -2306,8 +2370,8 @@ static int mt9m114_parse_dt(struct mt9m114 *sensor)
 
 	ep = fwnode_graph_get_next_endpoint(fwnode, NULL);
 	if (!ep) {
-		dev_err(&sensor->client->dev, "No endpoint found\n");
-		return -EINVAL;
+		return dev_err_probe(&sensor->client->dev, -EPROBE_DEFER,
+				     "waiting for fwnode graph endpoint\n");
 	}
 
 	sensor->bus_cfg.bus_type = V4L2_MBUS_UNKNOWN;
@@ -2341,7 +2405,8 @@ static int mt9m114_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct mt9m114 *sensor;
-	int ret;
+	unsigned int rate = 0;
+	int i, ret;
 
 	sensor = devm_kzalloc(dev, sizeof(*sensor), GFP_KERNEL);
 	if (!sensor)
@@ -2360,10 +2425,40 @@ static int mt9m114_probe(struct i2c_client *client)
 		return ret;
 
 	/* Acquire clocks, GPIOs and regulators. */
-	sensor->clk = devm_clk_get(dev, NULL);
+	sensor->clk = devm_clk_get_optional(dev, "xvclk");
 	if (IS_ERR(sensor->clk)) {
 		ret = PTR_ERR(sensor->clk);
-		dev_err_probe(dev, ret, "Failed to get clock\n");
+		dev_err_probe(dev, ret, "xvclk clock missing or invalid\n");
+		goto error_ep_free;
+	}
+	/*
+	 * We could have either a 24MHz or 19.2MHz clock rate from either DT or
+	 * ACPI... but we also need to support the weird IPU3 case which will
+	 * have an external clock AND a clock-frequency property. Check for the
+	 * clock-frequency property and if found, set that rate if we managed
+	 * to acquire a clock. This should cover the ACPI case. If the system
+	 * uses devicetree then the configured rate should already be set, so
+	 * we can just read it.
+	 */
+	ret = fwnode_property_read_u32(dev_fwnode(dev), "clock-frequency",
+				       &rate);
+	if (ret && !sensor->clk) {
+		dev_err_probe(dev, ret, "invalid clock config\n");
+		goto error_ep_free;
+	}
+
+	sensor->xvclk_freq = rate ?: clk_get_rate(sensor->clk);
+
+	for (i = 0; i < ARRAY_SIZE(mt9m114_xvclk_freqs); i++) {
+		if (sensor->xvclk_freq == mt9m114_xvclk_freqs[i])
+			break;
+	}
+
+	if (i == ARRAY_SIZE(mt9m114_xvclk_freqs)) {
+		ret = -EINVAL;
+		dev_err_probe(dev, ret,
+				    "unsupported xvclk frequency %d Hz\n",
+				    sensor->xvclk_freq);
 		goto error_ep_free;
 	}
 
@@ -2377,7 +2472,7 @@ static int mt9m114_probe(struct i2c_client *client)
 	sensor->supplies[0].supply = "vddio";
 	sensor->supplies[1].supply = "vdd";
 	sensor->supplies[2].supply = "vaa";
-
+		
 	ret = devm_regulator_bulk_get(dev, ARRAY_SIZE(sensor->supplies),
 				      sensor->supplies);
 	if (ret < 0) {
@@ -2479,16 +2574,24 @@ static void mt9m114_remove(struct i2c_client *client)
 }
 
 static const struct of_device_id mt9m114_of_ids[] = {
-	{ .compatible = "onnn,mt9m114" },
+	{ .compatible = "onnn,mt9m114,INT33F0" },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, mt9m114_of_ids);
+
+static const struct acpi_device_id mt9m114_acpi_ids[] = {
+	{ "INT33F0" },
+        { "CRMT1040" },
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(acpi, mt9m114_acpi_ids);
 
 static struct i2c_driver mt9m114_driver = {
 	.driver = {
 		.name	= "mt9m114",
 		.pm	= &mt9m114_pm_ops,
 		.of_match_table = mt9m114_of_ids,
+		.acpi_match_table = mt9m114_acpi_ids,
 	},
 	.probe		= mt9m114_probe,
 	.remove		= mt9m114_remove,
