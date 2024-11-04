@@ -85,7 +85,7 @@ $(info "External module build..")
 	$(MAKE) -C $(KDIR) M=$(PWD)
 
 PHONY += all
-all: clean $(DRIVER_NAME).ko
+all: $(DRIVER_NAME).ko
 
 PHONY += modules
 modules: $(DRIVER_NAME).ko
