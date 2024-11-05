@@ -2136,6 +2136,9 @@ static int mt9m114_power_on(struct mt9m114 *sensor)
 	if (ret < 0)
 		return ret;
 
+	dev_err(&sensor->client->dev, "Just stop here\n");
+	ret = -22;
+	goto error_regulator;
 	ret = clk_prepare_enable(sensor->clk);
 	if (ret < 0)
 		goto error_regulator;
@@ -2287,8 +2290,8 @@ static int mt9m114_clk_init(struct mt9m114 *sensor)
 		// Aptina calculator for some reason doesn't take account of the + 1 added later to p1 and n, while the previous
 		// mt9m114 driver was about "Aptina" 
 		// verdachte handeling, wellicht is het muteren van de klok wel allesverstorend
-		//sensor->pll.p1--;
-		//sensor->pll.n--;
+		sensor->pll.p1--;
+		sensor->pll.n--;
 	}
 	//from the original Onsemi driver, assuming a 24000000 clock
 	//sensor->pll.m = 32;
