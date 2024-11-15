@@ -1,6 +1,0 @@
-# SPDX-License-Identifier: GPL-2.0-only
-#
-# X86 Platform Specific Drivers
-#
-
-source "drivers/platform/x86/intel/Kconfig"

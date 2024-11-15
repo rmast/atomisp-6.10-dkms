@@ -8,29 +8,11 @@ Homepage: https://github.com/EasyNetDev/atomisp-6.10-dkms
 Vcs-Browser: https://github.com/EasyNetDev/atomisp-6.10-dkms
 Vcs-Git: https://github.com/EasyNetDev/atomisp-6.10-dkms.git
 
-Package: atomisp-6.10-dkms
-Architecture: all
-Depends: ${misc:Depends}, dkms, linux-libc-dev, libc6-dev
-XB-Modaliases: ${modaliases}
-Description:   Enable support for Intel Atom ISP camera for Kernel >= 6.10, but < 6.11
- Enable support for the Intel ISP2 camera interfaces and MIPI
- sensor drivers.
- This is original Linux Driver ported as external module.
-
 Package: atomisp-6.11-dkms
 Architecture: all
 Depends: ${misc:Depends}, dkms, linux-libc-dev, libc6-dev
 XB-Modaliases: ${modaliases}
-Description:   Enable support for Intel Atom ISP camera for Kernel >= 6.11, but < 6.12
- Enable support for the Intel ISP2 camera interfaces and MIPI
- sensor drivers.
- This is original Linux Driver ported as external module.
-
-Package: atomisp-6.12-dkms
-Architecture: all
-Depends: ${misc:Depends}, dkms, linux-libc-dev, libc6-dev
-XB-Modaliases: ${modaliases}
-Description:   Enable support for Intel Atom ISP camera for Kernels >= 6.12 and <= 6.12
+Description:   Enable support for Intel Atom ISP camera for Kernels >= 6.11 and <= 6.11
  Enable support for the Intel ISP2 camera interfaces and MIPI
  sensor drivers.
  This is original Linux Driver ported as external module.
