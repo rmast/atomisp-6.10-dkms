@@ -101,7 +101,7 @@ help:
 PHONY += install
 install:
 	echo "Curent path: $(PWD)"
-	for subdir in $(shell find $(PWD)/atomisp/6.10/drivers -maxdepth 1  -type d -printf "%f\n" | tail -n+2); do \
+	for subdir in $(shell find $(PWD)/atomisp/$(KVER_MAJ_MIN)/drivers -maxdepth 1  -type d -printf "%f\n" | tail -n+2); do \
 	    echo $$subdir; \
 	    MODULE_PATH=$(PWD)/atomisp/$(KVER_MAJ_MIN)/drivers/$$subdir; \
 	    echo $${MODULE_PATH}; \
