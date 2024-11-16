@@ -2145,7 +2145,7 @@ static int mt9m114_power_on(struct mt9m114 *sensor)
 
 	/* Perform a hard reset if available, or a soft reset otherwise. */
 	if (sensor->reset) {
-		long freq = clk_get_rate(sensor->clk);
+		long freq = sensor->xvclk_freq;
 		unsigned int duration;
 
 		/*
