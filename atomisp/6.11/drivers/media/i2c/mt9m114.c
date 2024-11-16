@@ -2136,9 +2136,6 @@ static int mt9m114_power_on(struct mt9m114 *sensor)
 	if (ret < 0)
 		return ret;
 
-	dev_err(&sensor->client->dev, "Just stop here\n");
-	ret = -22;
-	goto error_regulator;
 	ret = clk_prepare_enable(sensor->clk);
 	if (ret < 0)
 		goto error_regulator;
@@ -2197,6 +2194,7 @@ static int mt9m114_power_on(struct mt9m114 *sensor)
 			goto error_clock;
 	}
 
+	dev_err(&sensor->client->dev, "Voorbij set state\n");
 	/*
 	 * Before issuing any Set-State command, we must ensure that the sensor
 	 * reaches the standby mode (either initiated manually above in
@@ -2206,6 +2204,7 @@ static int mt9m114_power_on(struct mt9m114 *sensor)
 	if (ret < 0)
 		goto error_clock;
 
+	dev_err(&sensor->client->dev, "Voorbij poll state\n");
 	return 0;
 
 error_clock:
@@ -2531,6 +2530,9 @@ static int mt9m114_probe(struct i2c_client *client)
 	if (ret < 0)
 		goto error_ifp_cleanup;
 
+	ret = -EINVAL;
+	dev_err_probe(dev, ret, "After register subdev H\n");
+	goto error_ifp_cleanup;
 	/*
 	 * Decrease the PM usage count. The device will get suspended after the
 	 * autosuspend delay, turning the power off.

@@ -1010,9 +1010,10 @@ int atomisp_register_device_nodes(struct atomisp_device *isp)
 		err = media_create_pad_link(&isp->csi2_port[i].subdev.entity,
 					    CSI2_PAD_SOURCE, &isp->asd.subdev.entity,
 					    ATOMISP_SUBDEV_PAD_SINK, 0);
-		if (err)
+		if (err) {
+			dev_err(isp->dev, "media_create_pad_link CSI_PAD_SOURCE %d failed\n",i);
 			return err;
-
+		}
 		if (!isp->sensor_subdevs[i])
 			continue;
 
@@ -1028,8 +1029,10 @@ int atomisp_register_device_nodes(struct atomisp_device *isp)
 					    &isp->csi2_port[i].subdev.entity,
 					    CSI2_PAD_SINK,
 					    MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE);
-		if (err)
+		if (err) {
+			dev_err(isp->dev, "media_create_pad_link CSI2_PAD_SINK %d failed\n",i);
 			return err;
+		}
 
 		isp->input_cnt++;
 	}
