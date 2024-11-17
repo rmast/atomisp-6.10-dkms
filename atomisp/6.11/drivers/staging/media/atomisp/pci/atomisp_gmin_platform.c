@@ -232,8 +232,6 @@ static struct gmin_cfg_var t100_vars[] = {
 	{ "INT33F0:00_CsiPort",  "0" },
 	{ "INT33F0:00_CsiLanes", "1" },
 	{ "INT33F0:00_CamClk",   "1" },
-	{ "INT33F0:00_CsiFmt", "13"},
-	{ "INT33F0:00_CsiBayer", "0"},
 	{},
 };
 

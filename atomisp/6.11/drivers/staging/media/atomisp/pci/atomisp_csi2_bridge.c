@@ -49,14 +49,14 @@ static const guid_t intel_sensor_gpio_info_guid =
 	(((x) & INTEL_GPIO_DSM_SENSOR_ON_VAL_MASK) >> INTEL_GPIO_DSM_SENSOR_ON_VAL_SHIFT)
 
 /*
- * 822ace8f-2814-4174-a56b-5f029fe079ee was 11P2SF208
- * 377ba76a-f390-4aff-ab38-9b1bf33a3015 INT33F0
+ * 822ace8f-2814-4174-a56b-5f029fe079ee
  * This _DSM GUID returns a string from the sensor device, which acts as a
  * module identifier.
  */
 static const guid_t intel_sensor_module_guid =
-	GUID_INIT(0x377ba76a, 0xf390, 0x4aff,
-		  0xab, 0x38, 0x9b, 0x1b, 0xf3, 0x3a, 0x30, 0x15);
+	GUID_INIT(0x822ace8f, 0x2814, 0x4174,
+		  0xa5, 0x6b, 0x5f, 0x02, 0x9f, 0xe0, 0x79, 0xee);
+
 /*
  * dc2f6c4f-045b-4f1d-97b9-882a6860a4be
  * This _DSM GUID returns a package with n*2 strings, with each set of 2 strings
@@ -109,21 +109,6 @@ static struct gmin_cfg_var lenovo_ideapad_miix_310_vars[] = {
 static struct gmin_cfg_var xiaomi_mipad2_vars[] = {
 	/* _DSM contains the wrong CsiPort for the front facing OV5693 sensor */
 	{ "INT33BE:00", "CsiPort", "0" },
-	/* _DSM contains the wrong CsiLanes for the back facing T4KA3 sensor */
-	{ "XMCC0003:00", "CsiLanes", "4" },
-	{}
-};
-
-/* Cribbed from MCG defaults in the mt9m114 driver, not actually verified
- * vs. T100 hardware
- */
-static struct gmin_cfg_var asus_t100ta_vars[] = {
-	/* neither _DSM nor DSDT contain details for the front facing mt9m114 sensor */
-	{"INT33F0:00", "CsiPort", "0"},
-	{"INT33F0:00", "CsiLanes", "1"},
-	{"INT33F0:00", "CsiBayer", "0"},
-	{"INT33F0:00", "CamClk", "1"},
-	{"INT33F0:00", "HpllFreq", "3840"},
 	{}
 };
 
@@ -143,14 +128,6 @@ static const struct dmi_system_id gmin_cfg_dmi_overrides[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "Mipad2"),
 		},
 		.driver_data = xiaomi_mipad2_vars,
-	},
-	{
-		.matches = {
-			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "ASUSTeK COMPUTER INC."),
-			/* Non exact match to also match T100TAF */
-			DMI_MATCH(DMI_PRODUCT_NAME, "T100TA"),
-		},
-		.driver_data = asus_t100ta_vars,
 	},
 	{}
 };
