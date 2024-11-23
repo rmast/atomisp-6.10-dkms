@@ -4,7 +4,6 @@
 #
 
 source "drivers/platform/x86/intel/atomisp2/Kconfig"
-source "drivers/platform/x86/intel/int3472/Kconfig"
 
 config INTEL_BYTCRC_PWRSRC
 	tristate "Intel Bay Trail Crystal Cove power source driver"

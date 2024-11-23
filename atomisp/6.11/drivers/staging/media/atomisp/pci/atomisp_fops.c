@@ -5,17 +5,6 @@
  * Copyright (c) 2010 Intel Corporation. All Rights Reserved.
  *
  * Copyright (c) 2010 Silicon Hive www.siliconhive.com.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- *
  */
 
 #include <linux/module.h>
@@ -58,7 +47,7 @@ static int atomisp_queue_setup(struct vb2_queue *vq,
 	ret = atomisp_get_css_frame_info(pipe->asd, &pipe->frame_info);
 	if (ret) {
 		struct v4l2_format f = {
-			.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420,
+			.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV422P,
 			.fmt.pix.width = 10000,
 			.fmt.pix.height = 10000,
 		};

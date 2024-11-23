@@ -5,7 +5,6 @@
 #
 
 obj-$(CONFIG_INTEL_ATOMISP2_PDX86)	+= atomisp2/
-obj-$(CONFIG_INTEL_SKL_INT3472)		+= int3472/
 
 
 # Intel PMIC / PMC / P-Unit drivers

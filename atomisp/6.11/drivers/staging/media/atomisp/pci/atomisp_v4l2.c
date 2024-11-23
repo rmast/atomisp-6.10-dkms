@@ -5,17 +5,6 @@
  * Copyright (c) 2010-2017 Intel Corporation. All Rights Reserved.
  *
  * Copyright (c) 2010 Silicon Hive www.siliconhive.com.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- *
  */
 #include <linux/module.h>
 #include <linux/pci.h>
@@ -55,7 +44,7 @@
 /* G-Min addition: pull this in from intel_mid_pm.h */
 #define CSTATE_EXIT_LATENCY_C1  1
 
-/* cross componnet debug message flag */
+/* cross component debug message flag */
 int dbg_level;
 module_param(dbg_level, int, 0644);
 MODULE_PARM_DESC(dbg_level, "debug message level (default:0)");
@@ -661,7 +650,6 @@ static int atomisp_suspend(struct device *dev)
 	isp->asd.recreate_streams_on_resume = isp->asd.stream_prepared;
 	atomisp_destroy_pipes_stream(&isp->asd);
 
-	dev_dbg(isp->dev, "atomisp_suspend before power_off\n");
 	return atomisp_power_off(dev);
 }
 
@@ -1181,7 +1169,6 @@ static int atomisp_pci_probe(struct pci_dev *pdev, const struct pci_device_id *i
 
 	start = pci_resource_start(pdev, ATOM_ISP_PCI_BAR);
 	dev_dbg(&pdev->dev, "start: 0x%x\n", start);
-	dev_dbg(&pdev->dev, "device: 0x%x\n", id->device);
 
 	isp = devm_kzalloc(&pdev->dev, sizeof(*isp), GFP_KERNEL);
 	if (!isp)
@@ -1244,7 +1231,6 @@ static int atomisp_pci_probe(struct pci_dev *pdev, const struct pci_device_id *i
 		 * resolution accordingly.
 		 */
 		isp->dfs = &dfs_config_byt;
-		dev_dbg(&pdev->dev, "ATOMISP_PCI_DEVICE_SOC_BYT\n");
 
 		/*
 		 * HPLL frequency is known to be device-specific, but we don't
